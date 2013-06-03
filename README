@@ -4,11 +4,11 @@ Wire Protocol
 	Plain text, space seperated, length prefixed.
 	length version command id body
 	^       ^      ^       ^  ^
-	|	|      |       |  |_max 2048 bytes 
-	|	|      |       |__ 36 bytes
-	|	|      |__ 1 byte       
-	|       |__ 1 byte
-	|__max 16 bytes
+	|	|      |       |  | max 2048 bytes 
+	|	|      |       | 36 bytes
+	|	|      | 1 byte       
+	|       | 1 byte
+	| max 16 bytes
 
 Write API
 
