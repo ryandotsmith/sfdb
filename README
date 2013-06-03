@@ -1,0 +1,24 @@
+SFDB
+
+Wire Protocol
+	Plain text, space seperated, length prefixed.
+	length version command id body
+	^       ^      ^       ^  ^
+	|	|      |       |  |_max 2048 bytes 
+	|	|      |       |__ 36 bytes
+	|	|      |__ 1 byte       
+	|       |__ 1 byte
+	|__max 16 bytes
+
+Write API
+
+	> 58 1 p 533cf115-4ffc-4a97-a6eb-4c711645760c {\"hello\": \"world\"}
+	< 40 1 s 533cf115-4ffc-4a97-a6eb-4c711645760c 
+
+	> 58 1 p 533cf115-4ffc-4a97-a6eb-4c711645760c {\"hello\": \"world\"}
+	< 15 1 e 0.0.0.0:1234
+
+Read API
+
+	> 39 1 g 533cf115-4ffc-4a97-a6eb-4c711645760c
+	< 19 1 {\"hello\": \"world\"}

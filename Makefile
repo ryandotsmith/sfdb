@@ -1,9 +1,10 @@
 CC=gcc
-FLAGS=-I/home/action/usr/include -Wl,-rpath /home/action/usr/lib -L/home/action/usr/lib  
+FLAGS=-I/usr/local/BerkeleyDB.5.3/include -Wl,-rpath /usr/local/BerkeleyDB.5.3/lib -L/usr/local/BerkeleyDB.5.3/lib
 
 default: clean
-	$(CC) $(FLAGS) kq.c -ldb
+	$(CC) $(FLAGS) main.c -ldb -ltask
 
 clean:
 	rm -f a.out
-	rm -f /tmp/kq-env/*
+	rm -rf /tmp/sfdb-env
+	mkdir -p /tmp/sfdb-env
