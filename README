@@ -1,7 +1,9 @@
 SFDB
 
 Wire Protocol
+
 	Plain text, space seperated, length prefixed.
+
 	length version command id body
 	^      ^       ^       ^  ^
 	|      |       |       |  |
