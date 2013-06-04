@@ -3,12 +3,26 @@ SFDB
 Wire Protocol
 	Plain text, space seperated, length prefixed.
 	length version command id body
-	^       ^      ^       ^  ^
-	|	|      |       |  |max 2048 bytes 
-	|	|      |       |36 bytes
-	|	|      |1 byte       
-	|       |1 byte
-	|max 16 bytes
+	^      ^       ^       ^  ^
+	|      |       |       |  |
+	|      |       |       |  |
+	|      |       |       |  |upto 1048576 bytes
+	|      |       |       |
+	|      |       |       |36 bytes
+	|      |       |
+	|      |       |1 byte       
+        |      |
+	|      |1 byte
+	|
+	|upto 4 bytes
+
+Commands
+
+	p - Put data into the database.
+	g - Get data from the database.
+	s - Successfull execution.
+	e - Error with execution.
+	m - This node is not a writer.
 
 Write API
 
@@ -16,9 +30,12 @@ Write API
 	< 40 1 s 533cf115-4ffc-4a97-a6eb-4c711645760c 
 
 	> 58 1 p 533cf115-4ffc-4a97-a6eb-4c711645760c {\"hello\": \"world\"}
-	< 15 1 e 0.0.0.0:1234
+	< 53 1 m 533cf115-4ffc-4a97-a6eb-4c711645760c 0.0.0.0:1234
+
+	> 58 1 p 533cf115-4ffc-4a97-a6eb-4c711645760c {\"hello\": \"world\"}
+	< 54 1 e 533cf115-4ffc-4a97-a6eb-4c711645760c Storage full.
 
 Read API
 
-	> 39 1 g 533cf115-4ffc-4a97-a6eb-4c711645760c
-	< 19 1 {\"hello\": \"world\"}
+	> 40 1 g 533cf115-4ffc-4a97-a6eb-4c711645760c
+	< 59 1 s 533cf115-4ffc-4a97-a6eb-4c711645760c {\"hello\": \"world\"}
