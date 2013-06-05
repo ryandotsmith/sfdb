@@ -11,7 +11,7 @@ enum
         STACK = 32768
 };
 
-typedef struct conn {
+typedef struct {
 	DB_ENV *env;
 	DB *db;
 	int fd;
@@ -96,37 +96,51 @@ readnbytes(int fd, int nbytes, char *buff)
 void
 handle_req(void *v)
 {
-	int ret;
+	int len, ret;
+	char *buff, *cmd, *ver, *body, *resp;
 	conn *c;
+
 	c = (conn *)v;
 
-	char lens[4];
-	memset(&lens, 0, 4);
-	int n;
-	n = readuntil(c->fd, ' ', lens);
-	int len;
-	len = atoi(lens);
-
-	char buff[len + 1];
-	memset(buff, 0, len + 1);
-	readnbytes(c->fd, len, buff);
-
-	char body[len - 2];
-	strncpy(body, buff+2, len - 2);
-
-	char *resp;
-	if (buff[0] == 'p') {
-		if ((ret = put(c->db, body, &resp)) <= 0) {
-			ret = build_error("e unable to put", &resp);
-			fprintf(stderr, "error=%s\n", db_strerror(ret));
+	while(1) {
+		int n = 0;
+		char lens[4];
+		memset(&lens, 0, 4);
+		if((n = readuntil(c->fd, ' ', lens)) == 0) {
+			break;
 		}
-	} else if (buff[0] == 'g') {
-		if ((ret = get(c->db, body, &resp)) <= 0) {
-			ret = build_error("e unable to put", &resp);
-			fprintf(stderr, "error=%s\n", db_strerror(ret));
+		len = atoi(lens);
+		printf("length=%d\n", len);
+
+		buff = malloc(len);
+		if ((n = readnbytes(c->fd, len, buff)) == 0) {
+			break;
 		}
-	} 
-	fdwrite(c->fd, resp, ret);
+
+		ver = &buff[0];
+		if (*ver != '1') {
+			char *msg = "1 e unsupported version.";
+			fdwrite(c->fd, msg, strlen(msg) + 1);
+			break;
+		}
+
+		cmd = &buff[2];
+		body = buff + 4;
+		if (*cmd == 'p') {
+			if ((ret = put(c->db, body, &resp)) <= 0) {
+				ret = build_error("e unable to put", &resp);
+				fprintf(stderr, "error=%s\n", db_strerror(ret));
+			}
+		} else if (*cmd == 'g') {
+			if ((ret = get(c->db, body, &resp)) <= 0) {
+				ret = build_error("e unable to put", &resp);
+				fprintf(stderr, "error=%s\n", db_strerror(ret));
+			}
+		} 
+		fdwrite(c->fd, resp, ret);
+		resp = NULL;
+	}
+	printf("disconnected\n");
 	shutdown(c->fd);
 	close(c->fd);
 }
@@ -150,8 +164,8 @@ put(DB *db, char *body, char **resp)
 
 	k.size = 36;
 	k.data = body; 
-	v.size = strlen(body) - 37;
-	v.data = body + 37;
+	v.size = strlen(body) - 36;
+	v.data = body + 36;
 
 	if ((ret = db->put(db, NULL, &k, &v, 0)) != 0) {
 		return ret;
