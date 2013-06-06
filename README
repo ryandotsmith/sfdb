@@ -2,22 +2,25 @@ SFDB
 
 Wire Protocol
 
-	Plain text, space seperated, length prefixed.
+	Plain text, length prefixed.
 
-	length version command id body
-	^      ^       ^       ^  ^
-	|      |       |       |  |
-	|      |       |       |  |
-	|      |       |       |  |upto 1048576 bytes
-	|      |       |       |
-	|      |       |       |36 bytes
-	|      |       |
-	|      |       |1 byte       
-        |      |
-	|      |1 byte
+	LengthVersionCommandIdBody
+	^     ^      ^      ^ ^
+	|     |      |      | |
+	|     |      |      | |
+	|     |      |      | |Max 976.562 KB 
+	|     |      |      |
+	|     |      |      |36 bytes
+	|     |      |
+	|     |      |1 byte       
+        |     |
+	|     |1 byte
 	|
-	|upto 4 bytes
+	|6 bytes
 
+Version
+	
+	1
 Commands
 
 	p - Put data into the database.
@@ -25,19 +28,26 @@ Commands
 	s - Successfull execution.
 	e - Error with execution.
 	m - This node is not a writer.
+Id
 
-Write API
+	UUID
 
-	> 58 1 p 533cf115-4ffc-4a97-a6eb-4c711645760c {\"hello\": \"world\"}
-	< 40 1 s 533cf115-4ffc-4a97-a6eb-4c711645760c 
+Body
+	
+	Array of bytes up to ~976KB.
 
-	> 58 1 p 533cf115-4ffc-4a97-a6eb-4c711645760c {\"hello\": \"world\"}
-	< 53 1 m 533cf115-4ffc-4a97-a6eb-4c711645760c 0.0.0.0:1234
+Write Example
 
-	> 58 1 p 533cf115-4ffc-4a97-a6eb-4c711645760c {\"hello\": \"world\"}
-	< 54 1 e 533cf115-4ffc-4a97-a6eb-4c711645760c Storage full.
+	> 0000581p533cf115-4ffc-4a97-a6eb-4c711645760c{\"hello\": \"world\"}
+	< 0000401s533cf115-4ffc-4a97-a6eb-4c711645760c 
 
-Read API
+	> 0000581p533cf115-4ffc-4a97-a6eb-4c711645760c{\"hello\": \"world\"}
+	< 0000531m533cf115-4ffc-4a97-a6eb-4c711645760c0.0.0.0:1234
 
-	> 40 1 g 533cf115-4ffc-4a97-a6eb-4c711645760c
-	< 59 1 s 533cf115-4ffc-4a97-a6eb-4c711645760c {\"hello\": \"world\"}
+	> 0000581p533cf115-4ffc-4a97-a6eb-4c711645760c{\"hello\": \"world\"}
+	< 0000541e533cf115-4ffc-4a97-a6eb-4c711645760cStorage full.
+
+Read Example
+
+	> 0000401g533cf115-4ffc-4a97-a6eb-4c711645760c
+	< 0000591s533cf115-4ffc-4a97-a6eb-4c711645760c{\"hello\": \"world\"}
