@@ -96,9 +96,9 @@ readnbytes(int fd, int nbytes, char *buff)
 void
 handle_req(void *v)
 {
-	int len, ret, n;
-	char *buff, *body, *resp; //buff, body, and resp sizes not known.
-	char lens[4]; //each request/response prefixed with length max 9999.
+	int len, ret, n, offset;
+	char *buff, *resp; //buff, body, and resp sizes not known.
+	char lens[6]; //each request/response prefixed with length max 9999.
         char cmd[1];  //command parsed from the request.
 	char ver[1];  //version parsed from the request.
 	char id[36];  //id is commonly in uuid format.
@@ -106,74 +106,42 @@ handle_req(void *v)
 	c = (conn *)v;
 
 	while(1) {
-		printf("at=new-command\n");
-		memset(&lens, 0, sizeof lens);
-		memset(&cmd, 0, sizeof cmd);
-		memset(&ver, 0, sizeof ver);
 		n = 0;
-
-		if((n = readnbytes(c->fd, 4, lens)) == 0) {
+		if((n = readnbytes(c->fd, 6, lens)) == 0) {
 			break;
 		}
 		len = atoi(lens);
-		printf("length=%d\n", len);
 
 		buff = malloc(len);
 		if ((n = readnbytes(c->fd, len, buff)) == 0) {
 			break;
 		}
-
 		strncpy(ver, buff, 1);
-		if (*ver != '1') {
-			char *msg = "1 e unsupported version.";
-			fdwrite(c->fd, msg, strlen(msg) + 1);
-			break;
-		}
-		printf("version=%s\n", ver);
-
 		strncpy(cmd, buff + 1, 1);
-		printf("cmd=%s\n", cmd);
-
 		strncpy(id, buff + 2, 36);
-		printf("id=%s\n", id);
-
-		body = malloc(len - sizeof ver - sizeof cmd - sizeof id);
-		memcpy(body, buff + 38, len - 38);
-		printf("body=%s\n", body);
+		char body[len - 38];
+		strncpy(body, buff + 38, len - 38);
 
 		if (*cmd == 'p') {
 			if ((ret = put(c->db, id, body, &resp)) <= 0) {
-				ret = build_error("e unable to put", &resp);
 				fprintf(stderr, "error=%s\n", db_strerror(ret));
 			}
 		} else if (*cmd == 'g') {
 			if ((ret = get(c->db, id, &resp)) <= 0) {
-				ret = build_error("e unable to put", &resp);
 				fprintf(stderr, "error=%s\n", db_strerror(ret));
 			}
 		} 
 
-		printf("ret=%d resp=%s\n", ret, resp);
-		int finalsz = sizeof ver + sizeof cmd + sizeof id + ret;
-		char *final = malloc(finalsz);
-		//length of reply is finalsz - space allocated for length (4).
-		snprintf(final, finalsz, "%04d%c%c%s%s", 
-			finalsz - 4, '1', 's', id, resp);
-		printf("final=%s\n", final);
-		write(c->fd, final, finalsz);
-		free(final);
+		int sz = sizeof ver + sizeof cmd + sizeof id + ret;
+		char final[sizeof lens + sz];
+		sprintf(final, "%06d%*c%*c%*s%*s", 
+			sz, 1, '1', 1, 's', 36, id, ret, resp); 
+		fdwrite(c->fd, final, strlen(final));
+		free(buff);
 	}
 	printf("disconnected\n");
 	shutdown(c->fd);
 	close(c->fd);
-}
-
-int
-build_error(char *msg, char **resp)
-{
-	*resp = malloc(strlen(msg));
-	strcpy(*resp, msg);
-	return strlen(msg);
 }
 
 int
@@ -187,15 +155,14 @@ put(DB *db, char *id, char *body, char **resp)
 
 	k.size = 36;
 	k.data = id; 
-	v.size = strlen(body);
+	v.size = strlen(body) + 1;
 	v.data = body;
 
 	if ((ret = db->put(db, NULL, &k, &v, 0)) != 0) {
 		return ret;
 	}
-	printf("at=put id=%s\n", (char *)k.data);
-	*resp = k.data;
-	return k.size;
+	*resp = v.data;
+	return v.size;
 }
 
 int
