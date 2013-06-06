@@ -52,3 +52,7 @@ Read Example
 
 	> 0000401g533cf115-4ffc-4a97-a6eb-4c711645760c
 	< 0000591s533cf115-4ffc-4a97-a6eb-4c711645760c{\"hello\": \"world\"}
+
+Client Libraries
+
+	Ruby - https://github.com/ryandotsmith/sfdb-rb
