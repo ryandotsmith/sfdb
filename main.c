@@ -22,6 +22,7 @@ void handle_req(void *);
 void
 taskmain(int argc , char **argv)
 {
+	DB_SITE *site;
 	DB_ENV *env;
 	DB *db;
 
@@ -31,11 +32,24 @@ taskmain(int argc , char **argv)
 		exit(1);
 	}
 	printf("at=env-initialized\n");
+
+	if ((ret = init_site(env, 1)) != 0) {
+		fprintf(stderr, "init_db_site error: %s\n", db_strerror(ret));
+		exit(1);
+	}
+	printf("at=rep-initialized\n");
+
 	if ((ret = init_db(&db, env)) != 0) {
 		fprintf(stderr, "init_db error: %s\n", db_strerror(ret));
 		exit(1);
 	}
 	printf("at=db-initialized\n");
+
+	//Use 3 threads for processing replication events.
+	if ((ret = env->repmgr_start(env, 3, DB_REP_ELECTION)) != 0) {
+		fprintf(stderr, "repmgr error: %s\n", db_strerror(ret));
+		exit(1);
+	}
 
 	int cfd, fd;
 	int rport;
@@ -155,8 +169,10 @@ put(DB *db, char *id, char *body, char **resp)
 
 	k.size = 36;
 	k.data = id; 
+	k.flags = DB_DBT_MALLOC;
 	v.size = strlen(body) + 1;
 	v.data = body;
+	v.flags = DB_DBT_MALLOC;
 
 	if ((ret = db->put(db, NULL, &k, &v, 0)) != 0) {
 		return ret;
@@ -175,6 +191,9 @@ get(DB *db, char *id, char **resp)
 
 	k.size = 36;
 	k.data = id;
+	k.flags = DB_DBT_MALLOC;
+
+	v.flags = DB_DBT_MALLOC;
 	
 	if ((ret = db->get(db, NULL, &k, &v, 0)) != 0) {
 		return ret;
@@ -199,6 +218,8 @@ init_env(DB_ENV **dbenvp)
 		DB_INIT_LOCK | 
 		DB_INIT_LOG | 
 		DB_INIT_TXN | 
+		DB_INIT_REP |
+		DB_THREAD |
 		DB_INIT_MPOOL,
 		0);
 	if (ret != 0) {
@@ -237,4 +258,41 @@ init_db(DB **dbp, DB_ENV *env)
 	}
 	*dbp = db;
 	return 0;
+}
+
+int
+init_site(DB_ENV *env, int creator)
+{
+	int ret;
+
+	char *lhost = "localhost";
+	int lport = 5000;
+	char *ohost = "localhost";
+	int oport = 5001;
+
+	DB_SITE *site;
+	if ((ret = env->repmgr_site(env, lhost, lport, &site, 0)) != 0) {
+	printf("here\n");
+		return ret;
+	}
+
+	site->set_config(site, DB_LOCAL_SITE, 1);
+
+	if (creator) {
+		site->set_config(site, DB_GROUP_CREATOR, 1);
+	}
+	if ((ret = site->close(site)) != 0) {
+		return ret;
+	}
+
+	if (!creator) {
+		ret = env->repmgr_site(env, ohost, oport, &site, 0);
+		if (ret != 0) {
+			return ret;
+		}
+		site->set_config(site, DB_BOOTSTRAP_HELPER, 1);
+		if ((ret = site->close(site)) != 0) {
+			return ret;
+		}
+	}
 }
