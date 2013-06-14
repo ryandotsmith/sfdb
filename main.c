@@ -3,6 +3,7 @@
 #include <string.h>
 #include <error.h>
 #include <signal.h>
+#include <unistd.h>
 #include <task.h>
 #include <db.h>
 
@@ -10,6 +11,15 @@ enum
 {
         STACK = 32768
 };
+
+typedef struct {
+	char *lhost;
+	char *rhost;
+	int lport;
+	int rport;
+	int group_creator;
+	int srv_port;
+} options;
 
 //This struct makes it handy to pass state to
 //an async task. See taskmain and handle_req for usage.
@@ -223,11 +233,29 @@ init_site(DB_ENV *env, int creator)
 	}
 }
 
+void
+parse_opts(int argc, char **argv, options *opts) {
+	int c;
+	while ((c = getopt(argc, argv, "p:")) != -1) {
+		switch (c) {
+			case 'p':
+				opts->srv_port = atoi(optarg);
+				break;
+		}
+	}
+	return;
+}
+
 //libtask takes care of setting up the *main* function. The library 
 //requires that a function named taskmain be defined instead of main.
 void
 taskmain(int argc , char **argv)
 {
+	options opts;
+	opts.srv_port = 8000;
+	parse_opts(argc, argv, &opts);
+	printf("server-port=%d\n", opts.srv_port);
+
 	DB_SITE *site;
 	DB_ENV *env;
 	DB *db;
@@ -261,7 +289,7 @@ taskmain(int argc , char **argv)
 	int rport;
 	char remote[16];
 
-	fd = netannounce(TCP, 0, 8000);
+	fd = netannounce(TCP, 0, opts.srv_port);
 	if (fd < 0) {
 		fprintf(stderr, "Unable to announce on port 8000.\n");
 		exit(1);
