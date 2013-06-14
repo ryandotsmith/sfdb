@@ -223,6 +223,8 @@ init_site(DB_ENV *env, int creator)
 	}
 }
 
+//libtask takes care of setting up the *main* function. The library 
+//requires that a function named taskmain be defined instead of main.
 void
 taskmain(int argc , char **argv)
 {
