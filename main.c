@@ -272,7 +272,6 @@ init_site(DB_ENV *env, int creator)
 
 	DB_SITE *site;
 	if ((ret = env->repmgr_site(env, lhost, lport, &site, 0)) != 0) {
-	printf("here\n");
 		return ret;
 	}
 
