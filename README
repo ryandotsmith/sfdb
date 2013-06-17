@@ -22,13 +22,19 @@ Version
 	
 	1
 
-Commands
+Command
 
-	p - Put data into the database.
-	g - Get data from the database.
-	s - Successfull execution.
-	e - Error with execution.
-	m - This node is not a writer.
+	Request
+
+	p - Put
+	g - Get
+	c - Compare & Set 
+
+	Reply
+
+	s - Success 
+	e - Error
+	r - Redirect 
 Id
 
 	UUID
@@ -37,7 +43,12 @@ Body
 	
 	Array of bytes up to ~976KB.
 
-Write Example
+Put 
+	Synopsis:
+
+	Write the supplied value to the key identified by the request id.
+
+	Example:
 
 	> 0000581p533cf115-4ffc-4a97-a6eb-4c711645760c{\"hello\": \"world\"}
 	< 0000401s533cf115-4ffc-4a97-a6eb-4c711645760c 
@@ -48,10 +59,38 @@ Write Example
 	> 0000581p533cf115-4ffc-4a97-a6eb-4c711645760c{\"hello\": \"world\"}
 	< 0000541e533cf115-4ffc-4a97-a6eb-4c711645760cStorage full.
 
-Read Example
+Get 
+
+	Synopsis:
+
+	Retrieve the value of the supplied key. Response includes the key.
+
+	Example:
 
 	> 0000401g533cf115-4ffc-4a97-a6eb-4c711645760c
 	< 0000591s533cf115-4ffc-4a97-a6eb-4c711645760c{\"hello\": \"world\"}
+
+Compare & Set 
+
+	Synopsis:
+	
+	Write data to a key if the current value of the key matches
+	the expected value supplied by the client; otherwise return an error.
+	The body of the request must contain length prefixed values.
+
+	When operation fails due to invalid expectation, the body
+	of the response contains 2 length prefixed values: expected, actual.
+
+	Example:
+
+	> 0000421c533cf115-4ffc-4a97-a6eb-4c711645760c1011
+	< 0000391s533cf115-4ffc-4a97-a6eb-4c711645760c1
+
+	> 0000421c533cf115-4ffc-4a97-a6eb-4c711645760c1112
+	< 0000391s533cf115-4ffc-4a97-a6eb-4c711645760c2
+
+	> 0000421c533cf115-4ffc-4a97-a6eb-4c711645760c1112
+	< 0000421e533cf115-4ffc-4a97-a6eb-4c711645760c1112
 
 Client Libraries
 
