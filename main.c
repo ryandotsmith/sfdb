@@ -7,16 +7,21 @@
 #include <task.h>
 #include <db.h>
 
+int default_srv_port = 8000;
+int default_group_creator = 1;
+char *default_data_dir = "/tmp/sfdb-env";
+char default_local_addr[] = "localhost:5000";
+char default_remote_addr[] = "localhost:5001";
+
 enum
 {
         STACK = 32768
 };
 
 typedef struct {
-	char *lhost;
-	char *rhost;
-	int lport;
-	int rport;
+	char *local;
+	char *remote;
+	char *data_dir;
 	int group_creator;
 	int srv_port;
 } options;
@@ -28,6 +33,32 @@ typedef struct {
 	DB *db;
 	int fd;
 } conn;
+
+//Returns the port portion of an address:port string.
+int
+stoport(char *s)
+{
+	char *loc;
+	loc = strchr(s, ':');
+	if (loc != NULL) {
+		return atoi(loc + 1);
+	}
+	return 5555;
+}
+
+//Returns the host portion of an address:port string. 
+//This function mutates str truncating the string after ':' including the ':'.
+char *
+stohost(char *str)
+{
+	char *loc;
+	loc = strchr(str, ':');
+	if (loc != NULL) {
+		*loc = 0;
+		return str;
+	}
+	return "localhost";
+}
 
 int
 readnbytes(int fd, int nbytes, char *buff)
@@ -141,7 +172,7 @@ handle_req(void *v)
 }
 
 int 
-init_env(DB_ENV **dbenvp)
+init_env(DB_ENV **dbenvp, options *opts)
 {
 	DB_ENV *dbenv;
 	int ret;
@@ -149,7 +180,7 @@ init_env(DB_ENV **dbenvp)
 		return ret;
 	}
 	ret = dbenv->open(dbenv, 
-		"/tmp/sfdb-env", 
+		opts->data_dir,
 		DB_CREATE | 
 		DB_RECOVER | 
 		DB_INIT_LOCK | 
@@ -175,7 +206,7 @@ init_db(DB **dbp, DB_ENV *env)
 		return ret;
 	}
 
-	u_int32_t db_flags = DB_AUTO_COMMIT | DB_READ_UNCOMMITTED;
+	u_int32_t db_flags = DB_AUTO_COMMIT ;
 	ret = db->open(db, NULL, "sf.db", NULL, DB_UNKNOWN, db_flags, 0);
 	if (ret != 0) {
 		//If the error is ENOENT we should create the database.
@@ -198,14 +229,16 @@ init_db(DB **dbp, DB_ENV *env)
 }
 
 int
-init_site(DB_ENV *env, int creator)
+init_site(DB_ENV *env, options *opts)
 {
 	int ret;
+	char *lhost, *rhost;
+	int lport, rport;
 
-	char *lhost = "localhost";
-	int lport = 5000;
-	char *ohost = "localhost";
-	int oport = 5001;
+	lhost = stohost(opts->local);
+	lport = stoport(opts->local);
+	rhost = stohost(opts->remote);
+	rport = stoport(opts->remote);
 
 	DB_SITE *site;
 	if ((ret = env->repmgr_site(env, lhost, lport, &site, 0)) != 0) {
@@ -214,15 +247,15 @@ init_site(DB_ENV *env, int creator)
 
 	site->set_config(site, DB_LOCAL_SITE, 1);
 
-	if (creator) {
+	if (opts->group_creator) {
 		site->set_config(site, DB_GROUP_CREATOR, 1);
 	}
 	if ((ret = site->close(site)) != 0) {
 		return ret;
 	}
 
-	if (!creator) {
-		ret = env->repmgr_site(env, ohost, oport, &site, 0);
+	if (!opts->group_creator) {
+		ret = env->repmgr_site(env, rhost, rport, &site, 0);
 		if (ret != 0) {
 			return ret;
 		}
@@ -231,15 +264,24 @@ init_site(DB_ENV *env, int creator)
 			return ret;
 		}
 	}
+	return 0;
 }
 
 void
 parse_opts(int argc, char **argv, options *opts) {
 	int c;
-	while ((c = getopt(argc, argv, "p:")) != -1) {
+	while ((c = getopt(argc, argv, "l:r:d:p:")) != -1) {
 		switch (c) {
+			case 'd':
+				opts->data_dir = optarg;
 			case 'p':
 				opts->srv_port = atoi(optarg);
+				break;
+			case 'l':
+				opts->local = optarg;
+				break;
+			case 'r':
+				opts->remote = optarg;
 				break;
 		}
 	}
@@ -252,22 +294,25 @@ void
 taskmain(int argc , char **argv)
 {
 	options opts;
-	opts.srv_port = 8000;
+	opts.srv_port = default_srv_port;
+	opts.data_dir = default_data_dir;
+	opts.local = default_local_addr;
+	opts.remote = default_remote_addr;
+	opts.group_creator = default_group_creator;
 	parse_opts(argc, argv, &opts);
-	printf("server-port=%d\n", opts.srv_port);
 
 	DB_SITE *site;
 	DB_ENV *env;
 	DB *db;
 
 	int ret;
-	if ((ret = init_env(&env)) != 0) {
+	if ((ret = init_env(&env, &opts)) != 0) {
 		fprintf(stderr, "init_env error: %s\n", db_strerror(ret));
 		exit(1);
 	}
 	printf("at=env-initialized\n");
 
-	if ((ret = init_site(env, 1)) != 0) {
+	if ((ret = init_site(env, &opts)) != 0) {
 		fprintf(stderr, "init_db_site error: %s\n", db_strerror(ret));
 		exit(1);
 	}
