@@ -76,6 +76,90 @@ readnbytes(int fd, int nbytes, char *buff)
 }
 
 int
+parselpbytes(char *dest, char *src)
+{
+	const char max_len = 1;
+	char lens[max_len];
+	int len;
+
+	memmove(lens, src, max_len);
+	len = atoi(lens);
+
+	dest = malloc(len);
+	memmove(dest, src + max_len, len);
+	return len;
+}
+
+int
+cas(DB_ENV *env, DB *db, char *id, char *body, char **resp)
+{
+	char expected[1], new[1];
+	DBT k, v, actual;
+	DB_TXN *txn;
+	int new_sz, exists, expected_sz, ret;
+
+	memset(&k, 0, sizeof(k));
+	memset(&v, 0, sizeof(v));
+	memset(&actual, 0, sizeof(actual));
+
+	if ((ret = env->txn_begin(env, NULL, &txn, 0)) != 0) {
+		return ret;
+	}
+
+	k.flags = DB_DBT_MALLOC;
+	v.flags = DB_DBT_MALLOC;
+	actual.flags = DB_DBT_MALLOC;
+
+	k.size = 36;
+	k.data = id;
+
+	//Hang on to the length of the expected
+	//value so we can use it as an offset to retreive the new value.
+	expected_sz = parselpbytes(expected, body);
+	new_sz = parselpbytes(new, body + (expected_sz + 1));
+
+	//If the key doesn't exist, then we can safely put.
+	if ((db->exists(db, txn, &k, 0)) != 0) {
+		v.size = new_sz;
+		v.data = new;
+		if ((ret = db->put(db, txn, &k, &v, 0)) != 0) {
+			return ret;
+		}
+		if (ret = (txn->commit(txn, 0)) != 0) {
+			return ret;
+		}
+		*resp = v.data;
+		return v.size;
+	}
+
+	//Fetch the current value of the key.
+	//We will use the result to compare with the expected
+	//value parsed from the body of the request.
+	if ((ret = db->get(db, txn, &k, &actual, 0)) != 0) {
+		return ret;
+	}
+	if (strncmp(expected, (char *)actual.data, expected_sz) == 0) {
+		v.size = new_sz;
+		v.data = new;
+		if ((ret = db->put(db, txn, &k, &v, 0)) != 0) {
+			return ret;
+		}
+		if (ret = (txn->commit(txn, 0)) != 0) {
+			return ret;
+		}
+		*resp = v.data;
+		return v.size;
+	}
+
+	if (ret = (txn->abort(txn)) != 0) {
+		return ret;
+	}
+
+	//The compare step failed.
+	return -1;
+}
+
+int
 put(DB *db, char *id, char *body, char **resp)
 {
 	int ret;
@@ -111,13 +195,37 @@ get(DB *db, char *id, char **resp)
 	k.flags = DB_DBT_MALLOC;
 
 	v.flags = DB_DBT_MALLOC;
-	
+
 	if ((ret = db->get(db, NULL, &k, &v, 0)) != 0) {
 		return ret;
 	}
 
 	*resp = v.data;
 	return v.size;
+}
+
+int
+process_cmd(conn *c, char *cmd, char *id, char *body, char **resp)
+{
+	int ret;
+	switch(*cmd) {
+	case 'p':
+		if ((ret = put(c->db, id, body, resp)) <= 0) {
+			fprintf(stderr, "error=%s\n", db_strerror(ret));
+		}
+		break;
+	case 'g':
+		if ((ret = get(c->db, id, resp)) <= 0) {
+			fprintf(stderr, "error=%s\n", db_strerror(ret));
+		}
+		break;
+	case 'c':
+		if ((ret = cas(c->env, c->db, id, body, resp)) <= 0) {
+			fprintf(stderr, "cas-error=%s\n", db_strerror(ret));
+		}
+		break;
+	}
+	return ret;
 }
 
 void
@@ -138,7 +246,6 @@ handle_req(void *v)
 			break;
 		}
 		len = atoi(lens);
-
 		buff = malloc(len);
 		if ((n = readnbytes(c->fd, len, buff)) == 0) {
 			break;
@@ -148,17 +255,7 @@ handle_req(void *v)
 		strncpy(id, buff + 2, 36);
 		char body[len - 38];
 		strncpy(body, buff + 38, len - 38);
-
-		if (*cmd == 'p') {
-			if ((ret = put(c->db, id, body, &resp)) <= 0) {
-				fprintf(stderr, "error=%s\n", db_strerror(ret));
-			}
-		} else if (*cmd == 'g') {
-			if ((ret = get(c->db, id, &resp)) <= 0) {
-				fprintf(stderr, "error=%s\n", db_strerror(ret));
-			}
-		} 
-
+		ret = process_cmd(c, cmd, id, body, &resp);
 		int sz = sizeof ver + sizeof cmd + sizeof id + ret;
 		char final[sizeof lens + sz];
 		sprintf(final, "%06d%*c%*c%*s%*s", 
@@ -166,7 +263,6 @@ handle_req(void *v)
 		fdwrite(c->fd, final, strlen(final));
 		free(buff);
 	}
-	printf("disconnected\n");
 	shutdown(c->fd);
 	close(c->fd);
 }
@@ -341,6 +437,7 @@ taskmain(int argc , char **argv)
 	}
 	fdnoblock(fd);
 	while((cfd = netaccept(fd, remote, &rport)) >= 0) {
+		printf("at=client-connect remote=%s\n", remote);
 		conn *c = malloc(sizeof(conn));
 		c->db = db;
 		c->env = env;
