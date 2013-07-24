@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <error.h>
 #include <signal.h>
 #include <unistd.h>
 #include <task.h>
@@ -46,7 +45,7 @@ stoport(char *s)
 	return 5555;
 }
 
-//Returns the host portion of an address:port string. 
+//Returns the host portion of an address:port string.
 //This function mutates str truncating the string after ':' including the ':'.
 char *
 stohost(char *str)
@@ -169,7 +168,7 @@ put(DB *db, char *id, char *body, char **resp)
 	memset(&v, 0, sizeof(v));
 
 	k.size = 36;
-	k.data = id; 
+	k.data = id;
 	k.flags = DB_DBT_MALLOC;
 	v.size = strlen(body) + 1;
 	v.data = body;
@@ -258,8 +257,8 @@ handle_req(void *v)
 		ret = process_cmd(c, cmd, id, body, &resp);
 		int sz = sizeof ver + sizeof cmd + sizeof id + ret;
 		char final[sizeof lens + sz];
-		sprintf(final, "%06d%*c%*c%*s%*s", 
-			sz, 1, '1', 1, 's', 36, id, ret, resp); 
+		sprintf(final, "%06d%*c%*c%*s%*s",
+			sz, 1, '1', 1, 's', 36, id, ret, resp);
 		fdwrite(c->fd, final, strlen(final));
 		free(buff);
 	}
@@ -267,7 +266,7 @@ handle_req(void *v)
 	close(c->fd);
 }
 
-int 
+int
 init_env(DB_ENV **dbenvp, options *opts)
 {
 	DB_ENV *dbenv;
@@ -275,13 +274,13 @@ init_env(DB_ENV **dbenvp, options *opts)
 	if (ret = db_env_create(&dbenv, 0) != 0) {
 		return ret;
 	}
-	ret = dbenv->open(dbenv, 
+	ret = dbenv->open(dbenv,
 		opts->data_dir,
-		DB_CREATE | 
-		DB_RECOVER | 
-		DB_INIT_LOCK | 
-		DB_INIT_LOG | 
-		DB_INIT_TXN | 
+		DB_CREATE |
+		DB_RECOVER |
+		DB_INIT_LOCK |
+		DB_INIT_LOG |
+		DB_INIT_TXN |
 		DB_INIT_REP |
 		DB_THREAD |
 		DB_INIT_MPOOL,
@@ -308,12 +307,12 @@ init_db(DB **dbp, DB_ENV *env)
 		//If the error is ENOENT we should create the database.
 		if (ret == 2) {
 			printf("at=create-database\n");
-			ret = db->open(db, 
-					NULL, 
-					"sf.db", 
-					NULL, 
-					DB_BTREE, 
-					db_flags | DB_CREATE, 
+			ret = db->open(db,
+					NULL,
+					"sf.db",
+					NULL,
+					DB_BTREE,
+					db_flags | DB_CREATE,
 					0);
 		}
 		if (ret != 0) {
@@ -384,7 +383,7 @@ parse_opts(int argc, char **argv, options *opts) {
 	return;
 }
 
-//libtask takes care of setting up the *main* function. The library 
+//libtask takes care of setting up the *main* function. The library
 //requires that a function named taskmain be defined instead of main.
 void
 taskmain(int argc , char **argv)
